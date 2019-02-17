@@ -1,12 +1,12 @@
 # Requirements
 
 Use [00-network.yml](00-network.yml) to create a VPC with public and private subnets.  
-[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?#/stacks/new?stackName=demo-cloudformation-network&templateURL=https://s3-eu-west-1.amazonaws.com/sysless/demo-cloudformation/00-network.yml)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?#/stacks/new?stackName=demo-cf-network&templateURL=https://s3-eu-west-1.amazonaws.com/sysless/demo-cloudformation/00-network.yml)
 
 # Usage
 
 Launch stack from [02-environment.yml](02-environment.yml) and specify parameters.  
-[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?#/stacks/new?stackName=demo-cloudformation&templateURL=https://s3-eu-west-1.amazonaws.com/sysless/demo-cloudformation/02-environment.yml)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?#/stacks/new?stackName=demo-cf-env&templateURL=https://s3-eu-west-1.amazonaws.com/sysless/demo-cloudformation/02-environment.yml)
 
 # Content
 
