@@ -82,9 +82,11 @@ Resources:
                 from flaskext.mysql import MySQL
                 import boto3
                 import json
+                import socket
 
                 app = Flask(__name__)
 
+                hostname = socket.gethostname()
                 secrets_manager = boto3.client('secretsmanager')
                 secret_arn = '${SecretArn}'
                 mysql = MySQL()
@@ -98,9 +100,9 @@ Resources:
                     app.config['MYSQL_DATABASE_PASSWORD'] = secure_string.get('password')
                     mysql.init_app(app)
                     conn = mysql.connect()
-                    return 'Connected to ' + secure_string['host']
+                    return hostname + "<br />\n" + 'Connected to ' + secure_string['host']
                   except Exception as e:
-                    return 'Problem connecting to database: ' + str(e)
+                    return hostname + "<br />\n" + 'Problem connecting to database: ' + str(e)
               mode: "000644"
               owner: "ec2-user"
               group: "ec2-user"
