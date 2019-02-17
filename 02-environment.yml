@@ -1,0 +1,149 @@
+Parameters:
+  Vpc:
+    Type: AWS::EC2::VPC::Id
+  PrivateSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  PublicSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  DatabaseInstanceType:
+    Type: String
+    Default: db.t2.micro
+    AllowedValues:
+      - db.t2.micro
+      - db.t2.small
+      - db.t2.medium
+      - db.t2.large
+  DatabaseAllocatedStorage:
+    Type: Number
+    Default: 10
+  InstanceType:
+    Type: String
+    AllowedValues:
+    - t3.nano
+    - t3.micro
+    - t3.small
+    - t3.medium
+    - t3.large
+    Default: t3.nano
+  MinSize:
+    Type: Number
+    Default: 1
+  MaxSize:
+    Type: Number
+    Default: 2
+    MinValue: 2
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: "Network Configuration"
+      Parameters:
+      - Vpc
+      - PublicSubnets
+      - PrivateSubnets
+    - Label:
+        default: "Compute Configuration"
+      Parameters:
+      - InstanceType
+      - MinSize
+      - MaxSize
+    - Label:
+        default: "Database Configuration"
+      Parameters:
+      - DatabaseInstanceType
+      - DatabaseAllocatedStorage
+    ParameterLabels:
+      InstanceType:
+        default: Instance Type
+      MinSize:
+        default: Minimum instances
+      DatabaseInstanceType:
+        default: Instance Type
+      DatabaseAllocatedStorage:
+        default: Allocated Storage
+      DatabasePassword:
+        default: Password
+
+Resources:
+  ElbSG:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: !Sub "${AWS::StackName} ELB SG"
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+      - IpProtocol: "tcp"
+        FromPort: "80"
+        ToPort: "80"
+        CidrIp: 0.0.0.0/0
+
+  ApplicationSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "${AWS::StackName} Application SG"
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+      - IpProtocol: "tcp"
+        FromPort: "80"
+        ToPort: "80"
+        SourceSecurityGroupId: !Ref ElbSG
+
+  DatabaseSG:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: !Sub "${AWS::StackName} RDS SG"
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+      - IpProtocol: 'tcp'
+        FromPort: '3306'
+        ToPort: '3306'
+        SourceSecurityGroupId: !Ref ApplicationSG
+
+  Secret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "root"}'
+        GenerateStringKey: "password"
+        PasswordLength: 24
+        ExcludeCharacters: '"@/\'
+
+  SecretRotation:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      Parameters:
+        AppName: !Ref AWS::StackName
+        ApplicationSG: !Ref ApplicationSG
+        Subnets: !Join [',', !Ref PrivateSubnets]
+        Secret: !Ref Secret
+      TemplateURL: https://s3-eu-west-1.amazonaws.com/sysless/demo-cloudformation/01-secret-rotation.yml
+
+  Database:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      Parameters:
+        AppName: !Ref AWS::StackName
+        DatabaseInstanceType: !Ref DatabaseInstanceType
+        DatabaseAllocatedStorage: !Ref DatabaseAllocatedStorage
+        DatabaseSG: !Ref DatabaseSG
+        Subnets: !Join [',', !Ref PrivateSubnets]
+        SecretArn: !Ref Secret
+      TemplateURL: https://s3-eu-west-1.amazonaws.com/sysless/demo-cloudformation/01-database.yml
+
+  Application:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      Parameters:
+        AppName: !Ref AWS::StackName
+        InstanceType: !Ref InstanceType
+        MinSize: !Ref MinSize
+        MaxSize: !Ref MaxSize
+        ApplicationSG: !Ref ApplicationSG
+        ElbSG: !Ref ElbSG
+        Subnets: !Join [',', !Ref PublicSubnets]
+        SecretArn: !Ref Secret
+      TemplateURL: https://s3-eu-west-1.amazonaws.com/sysless/demo-cloudformation/01-application.yml
+
+Outputs:
+  DNSName:
+    Value: !GetAtt Application.Outputs.Url

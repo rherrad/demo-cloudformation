@@ -1,0 +1,41 @@
+Parameters:
+  AppName:
+    Type: String
+  DatabaseInstanceType:
+    Type: String
+  DatabaseAllocatedStorage:
+    Type: Number
+  DatabaseSG:
+    Type: AWS::EC2::SecurityGroup::Id
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  SecretArn:
+    Type: String
+
+Resources:
+  DatabaseSubnet:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: !Sub ${AWS::StackName} RDS Subnet
+      SubnetIds: !Ref Subnets
+
+  RDS:
+    Type: "AWS::RDS::DBInstance"
+    Properties:
+      StorageType: gp2
+      AllocatedStorage: !Ref DatabaseAllocatedStorage
+      DBInstanceClass: !Ref DatabaseInstanceType
+      Engine: "mysql"
+      EngineVersion: "5.7.19"
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref SecretArn, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref SecretArn, ':SecretString:password}}' ]]
+      DBSubnetGroupName: !Ref DatabaseSubnet
+      VPCSecurityGroups:
+      - !Ref DatabaseSG
+
+  SecretRDSAttachment:
+    Type: "AWS::SecretsManager::SecretTargetAttachment"
+    Properties:
+      SecretId: !Ref SecretArn
+      TargetId: !Ref RDS
+      TargetType: AWS::RDS::DBInstance

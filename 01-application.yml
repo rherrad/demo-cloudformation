@@ -1,0 +1,155 @@
+Parameters:
+  AppName:
+    Type: String
+  InstanceType:
+    Type: String
+  MinSize:
+    Type: String
+    Default: 1
+  MaxSize:
+    Type: String
+    Default: 1
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2'
+  ApplicationSG:
+    Type: String
+  ElbSG:
+    Type: String
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+  SecretArn:
+    Type: String
+
+Resources:
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - 'ec2.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      Policies:
+      - PolicyName: Secret
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'secretsmanager:GetSecretValue'
+            Resource: !Ref SecretArn
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+      - !Ref EC2Role
+
+  LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref InstanceProfile
+      AssociatePublicIpAddress: true
+      SecurityGroups:
+      - !Ref ApplicationSG
+      UserData: !Base64
+        Fn::Join: ["", [
+        "#!/bin/bash", "\n",
+        "/usr/bin/yum update -y", "\n",
+        "/opt/aws/bin/cfn-init -v -s ", !Ref 'AWS::StackName', " -r LaunchConfig --region ", !Ref 'AWS::Region',
+        ]]
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            python:
+              flask: []
+              flask-mysql: []
+              boto3: []
+          files:
+            /home/ec2-user/hello.py:
+              content: !Sub |
+                from flask import Flask
+                from flaskext.mysql import MySQL
+                import boto3
+                import json
+
+                app = Flask(__name__)
+
+                secrets_manager = boto3.client('secretsmanager')
+                secret_arn = '${SecretArn}'
+                mysql = MySQL()
+
+                @app.route('/')
+                def hello_world():
+                  try:
+                    secure_string = json.loads(secrets_manager.get_secret_value(SecretId=secret_arn)['SecretString'])
+                    app.config['MYSQL_DATABASE_HOST'] = secure_string.get('host')
+                    app.config['MYSQL_DATABASE_USER'] = secure_string.get('username')
+                    app.config['MYSQL_DATABASE_PASSWORD'] = secure_string.get('password')
+                    mysql.init_app(app)
+                    conn = mysql.connect()
+                    return 'Connected to ' + secure_string['host']
+                  except Exception as e:
+                    return 'Problem connecting to database: ' + str(e)
+              mode: "000644"
+              owner: "ec2-user"
+              group: "ec2-user"
+          commands:
+            startFlask:
+              cwd: /home/ec2-user
+              command: "python -m flask run -h 0.0.0.0 -p 80 &"
+              env:
+                FLASK_APP: hello.py
+                AWS_DEFAULT_REGION: !Ref AWS::Region
+
+  ASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref LaunchConfig
+      VPCZoneIdentifier: !Ref Subnets
+      MinSize: !Ref MinSize
+      MaxSize: !Ref MaxSize
+      HealthCheckGracePeriod: 300
+      LoadBalancerNames:
+      - !Ref Elb
+      Tags:
+        - Key: Name
+          Value: !Ref AppName
+          PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: 1
+        MinInstancesInService: !Ref MinSize
+
+  Elb:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      CrossZone: true
+      Listeners:
+        - LoadBalancerPort: '80'
+          InstancePort: '80'
+          Protocol: HTTP
+      Scheme: 'internet-facing'
+      HealthCheck:
+        Target: HTTP:80/
+        HealthyThreshold: '3'
+        UnhealthyThreshold: '5'
+        Interval: '30'
+        Timeout: '5'
+      SecurityGroups:
+      - !Ref ElbSG
+      Subnets: !Ref Subnets
+
+Outputs:
+  Url:
+    Value: !Join ['', ['http://', !GetAtt Elb.DNSName]]
