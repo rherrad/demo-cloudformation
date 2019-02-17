@@ -76,6 +76,9 @@ Resources:
         FromPort: "80"
         ToPort: "80"
         CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-ElbSG
 
   ApplicationSG:
     Type: AWS::EC2::SecurityGroup
@@ -87,6 +90,9 @@ Resources:
         FromPort: "80"
         ToPort: "80"
         SourceSecurityGroupId: !Ref ElbSG
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-ApplicationSG
 
   DatabaseSG:
     Type: "AWS::EC2::SecurityGroup"
@@ -98,6 +104,9 @@ Resources:
         FromPort: '3306'
         ToPort: '3306'
         SourceSecurityGroupId: !Ref ApplicationSG
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-DatabaseSG
 
   Secret:
     Type: 'AWS::SecretsManager::Secret'
