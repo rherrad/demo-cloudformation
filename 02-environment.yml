@@ -85,14 +85,18 @@ Resources:
     Properties:
       GroupDescription: !Sub "${AWS::StackName} Application SG"
       VpcId: !Ref Vpc
-      SecurityGroupIngress:
-      - IpProtocol: "tcp"
-        FromPort: "80"
-        ToPort: "80"
-        SourceSecurityGroupId: !Ref ElbSG
       Tags:
       - Key: Name
         Value: !Sub ${AWS::StackName}-ApplicationSG
+
+  ApplicationSGIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt ApplicationSG.GroupId
+      IpProtocol: "tcp"
+      FromPort: "80"
+      ToPort: "80"
+      SourceSecurityGroupId: !GetAtt ElbSG.GroupId
 
   DatabaseSG:
     Type: "AWS::EC2::SecurityGroup"
